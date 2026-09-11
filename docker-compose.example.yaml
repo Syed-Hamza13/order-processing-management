@@ -1,0 +1,48 @@
+services:
+
+  order-processing-backend:
+    image: syedhamza6265/order-processing-management-backend:1.0.0
+    container_name: order-processing-backend
+
+    restart: unless-stopped
+
+    ports:
+      - "8075:8075"
+
+    environment:
+      NODE_ENV: production
+      PORT: 8075
+
+      DB_HOST: #db host
+      DB_PORT: 3306
+      DB_USER: #db user
+      DB_PASSWORD: #db password
+      DB_NAME: #db name
+
+      JWT_SECRET: YOUR_LONG_RANDOM_JWT_SECRET
+
+      CORS_ORIGINS: # cors origins for frontend, e.g., http://localhost:3000, http://192.168.1.100:5173
+
+    networks:
+      - order-management-network
+
+
+  order-processing-frontend:
+    image: syedhamza6265/order-processing-management-frontend:1.0.1
+    container_name: order-processing-frontend
+
+    restart: unless-stopped
+
+    ports:
+      - "8074:8074"
+
+    depends_on:
+      - order-processing-backend
+
+    networks:
+      - order-management-network
+
+
+networks:
+  order-management-network:
+    driver: bridge
