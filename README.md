@@ -191,7 +191,7 @@ You may also use phpMyAdmin or another MySQL administration tool.
 Create the database:
 
 ```sql
-CREATE DATABASE eklavya_pitara;
+CREATE DATABASE database_name;
 ```
 
 Create a MySQL user if required:
@@ -204,7 +204,7 @@ Grant access:
 
 ```sql
 GRANT ALL PRIVILEGES
-ON eklavya_pitara.*
+ON db_name.*
 TO 'your_db_user'@'%';
 
 FLUSH PRIVILEGES;
@@ -884,7 +884,7 @@ environment:
   DB_PORT: 3306
   DB_USER: your_db_user
   DB_PASSWORD: your_db_password
-  DB_NAME: eklavya_pitara
+  DB_NAME: db_name
 
   JWT_SECRET: your-long-random-secret
 
@@ -1020,7 +1020,7 @@ Add stack
 Give the stack a name, for example:
 
 ```text
-eklavya-pitara
+order-processing-management
 ```
 
 ## 21.2 Add the Compose Configuration
