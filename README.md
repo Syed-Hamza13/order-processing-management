@@ -4,6 +4,10 @@ A local, single-admin web application for Eklavya Foundation's Eklavya Pitara pr
 
 The system replaces the older Word-document-based workflow with a browser-based system for order management, label template design, and physical label printing.
 
+![Application Dashboard](docs/images/application-dashboard.png)
+![Template Editor](docs/images/template-editor.png)
+![Print Preview](docs/images/print-preview.png)
+
 ## Features
 
 - Dynamic/custom order fields
