@@ -105,19 +105,19 @@ The frontend development server port is controlled through the `VITE_PORT` envir
 For example:
 
 ```env
-VITE_PORT=8075
+VITE_PORT=5173
 ```
 
 The frontend will then be available at:
 
 ```text
-http://localhost:8075
+http://localhost:5173
 ```
 
 Vite is configured with `host: true`, so the frontend can also be accessed from other devices on the same local network using the machine's LAN IP:
 
 ```text
-http://<your-machine-LAN-IP>:8075
+http://<your-machine-LAN-IP>:5173
 ```
 
 If `VITE_PORT` is not specified, the frontend falls back to Vite's default port:
