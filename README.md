@@ -785,7 +785,7 @@ http://<SERVER_IP>:8074/api
 Nginx internally forwards it to:
 
 ```text
-http://order-processing-pitara-backend:8075/api/
+http://order-processing-backend:8075/api/
 ```
 
 > **Important:** `VITE_*` variables are build-time variables in Vite. Adding them to Docker Compose after the React image is already built does not modify the production bundle.
@@ -807,9 +807,9 @@ Example:
 ```yaml
 services:
 
-  order-processing-pitara-backend:
+  order-processing-backend:
     image: syedhamza6265/order-processing-management-backend:1.0.0
-    container_name: order-processing-backend-pitara
+    container_name: order-processing-backend
 
     restart: unless-stopped
 
@@ -834,9 +834,9 @@ services:
       - order-management-network
 
 
-  order-processing-pitara-frontend:
+  order-processing-frontend:
     image: syedhamza6265/order-processing-management-frontend:1.0.0
-    container_name: order-processing-frontend-pitara
+    container_name: order-processing-frontend
 
     restart: unless-stopped
 
@@ -844,7 +844,7 @@ services:
       - "8074:8074"
 
     depends_on:
-      - order-processing-pitara-backend
+      - order-processing-backend
 
     networks:
       - order-management-network
@@ -912,25 +912,25 @@ order-management-network
 The backend service name is:
 
 ```text
-order-processing-pitara-backend
+order-processing-backend
 ```
 
 Nginx communicates with the backend using:
 
 ```text
-http://order-processing-pitara-backend:8075
+http://order-processing-backend:8075
 ```
 
 API proxy:
 
 ```text
-http://order-processing-pitara-backend:8075/api/
+http://order-processing-backend:8075/api/
 ```
 
 Uploads proxy:
 
 ```text
-http://order-processing-pitara-backend:8075/uploads/
+http://order-processing-backend:8075/uploads/
 ```
 
 The Docker service name must match the backend service name in the Compose file.
@@ -1070,8 +1070,8 @@ Portainer will:
 Expected containers:
 
 ```text
-order-processing-backend-pitara
-order-processing-frontend-pitara
+order-processing-backend
+order-processing-frontend
 ```
 
 Expected network:
@@ -1089,7 +1089,7 @@ order-management-network
 In Portainer, verify:
 
 ```text
-order-processing-backend-pitara
+order-processing-backend
 ```
 
 is running.
@@ -1101,7 +1101,7 @@ Check its logs for successful database initialization.
 Verify:
 
 ```text
-order-processing-frontend-pitara
+order-processing-frontend
 ```
 
 is running.
@@ -1161,7 +1161,7 @@ Open:
 ```text
 Portainer
 → Containers
-→ order-processing-backend-pitara
+→ order-processing-backend
 → Logs
 ```
 
@@ -1192,7 +1192,7 @@ Check:
 Nginx should proxy API requests to:
 
 ```text
-http://order-processing-pitara-backend:8075/api/
+http://order-processing-backend:8075/api/
 ```
 
 ## 23.3 Uploaded Images or Assets Do Not Load
@@ -1202,7 +1202,7 @@ Check the Nginx `/uploads/` proxy.
 It should point to:
 
 ```text
-http://order-processing-pitara-backend:8075/uploads/
+http://order-processing-backend:8075/uploads/
 ```
 
 Also check:
@@ -1614,7 +1614,7 @@ http://<SERVER_IP>:8074
 - The production backend runs on port `8075`.
 - The frontend communicates with the backend through Nginx.
 - Production frontend does not require `VITE_API_URL` or `VITE_PORT` in Docker Compose.
-- The backend Docker service name is `order-processing-pitara-backend`.
+- The backend Docker service name is `order-processing-backend`.
 - Nginx uses that service name for `/api/` and `/uploads/`.
 - Docker image tags should be versioned.
 - Production credentials must never be committed to GitHub.
