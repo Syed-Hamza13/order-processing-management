@@ -3,7 +3,11 @@ import { fabric } from "fabric";
 import api from "../api";
 import { useToast } from "../context/ToastContext.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
-import { getCanvasDimensions, PAGE_SIZE_OPTIONS } from "../utils/pageSizes.js";
+import {
+  getCanvasDimensions,
+  PAGE_SIZE_OPTIONS,
+  MM_TO_PX,
+} from "../utils/pageSizes.js";
 
 export default function TemplateEditor() {
   const toast = useToast();
@@ -27,6 +31,16 @@ export default function TemplateEditor() {
   const [fontSizeValue, setFontSizeValue] = useState(16);
   const [strokeWidthValue, setStrokeWidthValue] = useState(1);
   const [styleVersion, setStyleVersion] = useState(0);
+
+  // Page margins in mm. These are a visual design guide only — they're drawn straight onto the
+  // canvas overlay (not as a Fabric object), so they can never be selected, deleted, saved into
+  // the objects list, or end up in the printed label. linkMargins keeps all four in sync.
+  const DEFAULT_MARGINS = { top: 0, right: 0, bottom: 0, left: 0 };
+  const [margins, setMargins] = useState(DEFAULT_MARGINS);
+  const [linkMargins, setLinkMargins] = useState(true);
+  // The after:render handler is registered once and reads margins through this ref, so changing
+  // a margin value never needs to tear down and re-register the canvas listener.
+  const marginsRef = useRef(DEFAULT_MARGINS);
 
   // Keep the Font Size / Border Width number inputs in sync with whichever object is
   // currently selected, so switching selection always shows that object's real value
@@ -59,8 +73,41 @@ export default function TemplateEditor() {
     const dims = getCanvasDimensions("A5", "landscape");
     canvas.setWidth(dims.width);
     canvas.setHeight(dims.height);
-    return () => canvas.dispose();
+
+    // Draw the margin guide directly on the canvas context after every render. Because this
+    // paints on the raw 2D context instead of adding a Fabric object, it's invisible to
+    // getObjects()/toJSON()/toSVG() — so it shows only while designing and never reaches the
+    // saved template or the printed label.
+    const drawMarginGuide = () => {
+      const m = marginsRef.current;
+      if (!m || (!m.top && !m.right && !m.bottom && !m.left)) return;
+      const ctx = canvas.getContext();
+      if (!ctx) return;
+      const left = m.left * MM_TO_PX;
+      const top = m.top * MM_TO_PX;
+      const width = canvas.getWidth() - (m.left + m.right) * MM_TO_PX;
+      const height = canvas.getHeight() - (m.top + m.bottom) * MM_TO_PX;
+      if (width <= 0 || height <= 0) return;
+      ctx.save();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(left, top, width, height);
+      ctx.restore();
+    };
+    canvas.on("after:render", drawMarginGuide);
+
+    return () => {
+      canvas.off("after:render", drawMarginGuide);
+      canvas.dispose();
+    };
   }, []);
+
+  // Keep the ref in sync and repaint whenever a margin value changes.
+  useEffect(() => {
+    marginsRef.current = margins;
+    fabricRef.current?.requestRenderAll();
+  }, [margins]);
 
   // ---- Copy / Paste (Ctrl+C / Ctrl+V) ----
   useEffect(() => {
@@ -168,6 +215,7 @@ export default function TemplateEditor() {
     const dims = getCanvasDimensions(t.page_size, t.orientation);
     canvas.setWidth(dims.width);
     canvas.setHeight(dims.height);
+    setMargins(json.meta?.margins || DEFAULT_MARGINS);
     canvas.loadFromJSON(json, () => {
       // Controls-visibility restrictions on text objects (see restrictTextControls) are a
       // runtime-only setting and are not part of the saved JSON, so they must be reapplied
@@ -189,13 +237,18 @@ export default function TemplateEditor() {
     setSelectedObj(null);
     setSelectedLayoutId(null);
     setLayoutVersion((version) => version + 1);
+    setMargins(DEFAULT_MARGINS);
     resizeCanvas("A5", "landscape");
   }
 
   async function saveTemplate() {
     const canvas = fabricRef.current;
     const json = canvas.toJSON(["data"]);
-    json.meta = { width: canvas.getWidth(), height: canvas.getHeight() };
+    json.meta = {
+      width: canvas.getWidth(),
+      height: canvas.getHeight(),
+      margins,
+    };
     console.log("[TemplateEditor] saveTemplate:", {
       pageSize,
       orientation,
@@ -436,7 +489,7 @@ export default function TemplateEditor() {
       fabricRef.current.requestRenderAll();
     }
   }
-    function setTextAlign(align) {
+  function setTextAlign(align) {
     const obj = fabricRef.current.getActiveObject();
     if (obj && obj.set) {
       obj.set("textAlign", align);
@@ -718,6 +771,44 @@ export default function TemplateEditor() {
               <option value="portrait">Portrait</option>
             </select>
           </div>
+                    <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="label-text !mb-0">Page Margins (mm)</label>
+              <label className="flex items-center gap-1 text-[11px] text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={linkMargins}
+                  onChange={(e) => setLinkMargins(e.target.checked)}
+                />
+                Link all
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {["top", "right", "bottom", "left"].map((side) => (
+                <label key={side} className="text-[11px] text-gray-500 capitalize">
+                  {side}
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className="input !py-1 text-xs"
+                    value={margins[side]}
+                    onChange={(e) => {
+                      const v = Math.max(0, Number(e.target.value) || 0);
+                      setMargins((m) =>
+                        linkMargins
+                          ? { top: v, right: v, bottom: v, left: v }
+                          : { ...m, [side]: v },
+                      );
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              Shown as a red dashed guide while designing — never printed.
+            </p>
+          </div>
           <div>
             <div className="text-xs font-semibold text-gray-500 mb-1">
               SAVED TEMPLATES
@@ -811,7 +902,7 @@ export default function TemplateEditor() {
                   }}
                 />
               </label>
-                            <label>
+              <label>
                 Color{" "}
                 <input
                   type="color"
