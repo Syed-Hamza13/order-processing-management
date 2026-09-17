@@ -6,7 +6,7 @@ export const MM_TO_PX = 96 / 25.4;
 export const PAGE_SIZES_MM = {
   A3: { w: 297, h: 420 },
   A4: { w: 210, h: 297 },
-  A5: { w: 148, h: 210 },
+  A5: { w: 146, h: 208 },
   LETTER: { w: 215.9, h: 279.4 },
   ENVELOPE: { w: 110, h: 220 }, // DL envelope — adjust in the editor if your office uses a different envelope size
 };

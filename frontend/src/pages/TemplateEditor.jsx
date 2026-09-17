@@ -26,6 +26,7 @@ export default function TemplateEditor() {
   const [croppingActive, setCroppingActive] = useState(false);
   const [fontSizeValue, setFontSizeValue] = useState(16);
   const [strokeWidthValue, setStrokeWidthValue] = useState(1);
+  const [styleVersion, setStyleVersion] = useState(0);
 
   // Keep the Font Size / Border Width number inputs in sync with whichever object is
   // currently selected, so switching selection always shows that object's real value
@@ -435,12 +436,36 @@ export default function TemplateEditor() {
       fabricRef.current.requestRenderAll();
     }
   }
-  function setTextAlign(align) {
+    function setTextAlign(align) {
     const obj = fabricRef.current.getActiveObject();
     if (obj && obj.set) {
       obj.set("textAlign", align);
       fabricRef.current.requestRenderAll();
     }
+  }
+
+  // Bold / Italic / Underline toggles. These are standard Fabric text properties, so they're
+  // included in canvas.toJSON() automatically — nothing extra is needed to save or reload them.
+  function toggleBold() {
+    const obj = fabricRef.current.getActiveObject();
+    if (!obj || !obj.set) return;
+    obj.set("fontWeight", obj.fontWeight === "bold" ? "normal" : "bold");
+    fabricRef.current.requestRenderAll();
+    setStyleVersion((v) => v + 1);
+  }
+  function toggleItalic() {
+    const obj = fabricRef.current.getActiveObject();
+    if (!obj || !obj.set) return;
+    obj.set("fontStyle", obj.fontStyle === "italic" ? "normal" : "italic");
+    fabricRef.current.requestRenderAll();
+    setStyleVersion((v) => v + 1);
+  }
+  function toggleUnderline() {
+    const obj = fabricRef.current.getActiveObject();
+    if (!obj || !obj.set) return;
+    obj.set("underline", !obj.underline);
+    fabricRef.current.requestRenderAll();
+    setStyleVersion((v) => v + 1);
   }
 
   function selectedDesignObjects() {
@@ -786,7 +811,7 @@ export default function TemplateEditor() {
                   }}
                 />
               </label>
-              <label>
+                            <label>
                 Color{" "}
                 <input
                   type="color"
@@ -794,6 +819,42 @@ export default function TemplateEditor() {
                   onChange={(e) => setColor(e.target.value)}
                 />
               </label>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Style</span>
+                <button
+                  type="button"
+                  title="Bold"
+                  className={
+                    "btn-secondary !px-2.5 !py-1 text-xs font-bold " +
+                    (selectedObj.fontWeight === "bold" ? "!bg-brand-50" : "")
+                  }
+                  onClick={toggleBold}
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  title="Italic"
+                  className={
+                    "btn-secondary !px-2.5 !py-1 text-xs italic " +
+                    (selectedObj.fontStyle === "italic" ? "!bg-brand-50" : "")
+                  }
+                  onClick={toggleItalic}
+                >
+                  I
+                </button>
+                <button
+                  type="button"
+                  title="Underline"
+                  className={
+                    "btn-secondary !px-2.5 !py-1 text-xs underline " +
+                    (selectedObj.underline ? "!bg-brand-50" : "")
+                  }
+                  onClick={toggleUnderline}
+                >
+                  U
+                </button>
+              </div>
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">Align</span>
                 <button
