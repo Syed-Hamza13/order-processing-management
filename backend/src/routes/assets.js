@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const safe = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     cb(null, safe);
-  },
+  }, 
 });
 const upload = multer({
   storage,
@@ -45,7 +45,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     const filePath = path.join(uploadDir, row.filename);
     fs.existsSync(filePath) && fs.unlinkSync(filePath);
   }
-  await pool.query('DELETE FROM assets WHERE id = ?', [req.params.id]);
+  await pool.query('DELETE FROM assets WHERE id = ?', [req.params.id]); 
   res.json({ success: true });
 }));
 
