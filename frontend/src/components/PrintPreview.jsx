@@ -35,17 +35,24 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
   // order data in the DB is never touched.
   const [pincodeConfig, setPincodeConfig] = useState(null);
   const [pincodeAutoFillState, setPincodeAutoFillState] = useState({}); // { [orderId]: boolean }
-  const [pincodeLoadingState, setPincodeLoadingState] = useState({});  // { [orderId]: boolean }
-  const [pincodeOverrides, setPincodeOverrides] = useState({});        // { [orderId]: suffixString }
+  const [pincodeLoadingState, setPincodeLoadingState] = useState({}); // { [orderId]: boolean }
+  const [pincodeOverrides, setPincodeOverrides] = useState({}); // { [orderId]: suffixString }
 
   useEffect(() => {
-    api.get("/pincode/config").then((res) => setPincodeConfig(res.data)).catch(() => setPincodeConfig(null));
+    api
+      .get("/pincode/config")
+      .then((res) => setPincodeConfig(res.data))
+      .catch(() => setPincodeConfig(null));
   }, []);
 
   async function togglePincodeAutoFill(order, checked) {
     setPincodeAutoFillState((s) => ({ ...s, [order.id]: checked }));
     if (!checked) {
-      setPincodeOverrides((s) => { const n = { ...s }; delete n[order.id]; return n; });
+      setPincodeOverrides((s) => {
+        const n = { ...s };
+        delete n[order.id];
+        return n;
+      });
       return;
     }
     const pin = order.data?.[pincodeConfig.print_pincode_field_slug];
@@ -60,7 +67,9 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
       const suffix = buildLocationSuffix(res.data.district, res.data.state);
       setPincodeOverrides((s) => ({ ...s, [order.id]: suffix }));
     } catch (err) {
-      toast.error(err.response?.data?.error || "Could not fetch district/state.");
+      toast.error(
+        err.response?.data?.error || "Could not fetch district/state.",
+      );
       setPincodeAutoFillState((s) => ({ ...s, [order.id]: false }));
     } finally {
       setPincodeLoadingState((s) => ({ ...s, [order.id]: false }));
@@ -188,12 +197,16 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
 
         objects.forEach((obj) => {
           if (obj.data?.placeholderType === "field") {
-            const f = fieldBySlug(obj.data.fieldSlug); 
+            const f = fieldBySlug(obj.data.fieldSlug);
             let val = order.data?.[obj.data.fieldSlug] ?? "";
             if (f?.type === "date" && val) val = toIndianDate(val);
             // Append District/State to the configured Address field only — computed fresh
             // from the real order value every time, so it never stacks up on repeated renders.
-            if (locationSuffix && addressSlug && obj.data.fieldSlug === addressSlug) {
+            if (
+              locationSuffix &&
+              addressSlug &&
+              obj.data.fieldSlug === addressSlug
+            ) {
               val = `${val}${locationSuffix}`;
             }
             obj.set("text", String(val));
@@ -215,8 +228,17 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
         membersByLayout.forEach((members) => {
           const growth = members
             .map(({ obj, top, left, width, height }) => {
-              const newHeight = obj.getScaledHeight ? obj.getScaledHeight() : obj.height;
-              return { obj, top, left, width, height, delta: Math.max(0, newHeight - height) };
+              const newHeight = obj.getScaledHeight
+                ? obj.getScaledHeight()
+                : obj.height;
+              return {
+                obj,
+                top,
+                left,
+                width,
+                height,
+                delta: Math.max(0, newHeight - height),
+              };
             })
             .sort((a, b) => a.top - b.top || a.left - b.left);
 
@@ -227,7 +249,8 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
               const earlierBottomOriginal = earlier.top + earlier.height;
               const isBelow = member.top >= earlierBottomOriginal - 1;
               const overlapsHorizontally =
-                earlier.left < member.left + member.width && member.left < earlier.left + earlier.width;
+                earlier.left < member.left + member.width &&
+                member.left < earlier.left + earlier.width;
               if (isBelow && overlapsHorizontally) shift += earlier.delta;
             });
             if (shift > 0) member.obj.set("top", member.top + shift);
@@ -281,7 +304,9 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
     const printWindow = window.open("", "_blank", "width=900,height=900");
 
     if (!printWindow) {
-      toast.error("Print window was blocked by the browser. Allow pop-ups for this site.");
+      toast.error(
+        "Print window was blocked by the browser. Allow pop-ups for this site.",
+      );
       return;
     }
 
@@ -424,9 +449,55 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
                 margin: 0 !important;
                 padding: 0 !important;
               }
+                          /* On-screen only toolbar — hidden during the actual print so it never lands on
+                 a label. Replaces the old auto-close behaviour (see the note in handlePrint). */
+              .print-toolbar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                display: flex;
+                gap: 8px;
+                justify-content: center;
+                padding: 8px;
+                background: #f3f4f6;
+                border-bottom: 1px solid #d1d5db;
+                font-family: system-ui, sans-serif;
+                z-index: 999;
+              }
+
+              .print-toolbar button {
+                padding: 6px 14px;
+                font-size: 13px;
+                border-radius: 6px;
+                border: 1px solid #d1d5db;
+                background: #fff;
+                cursor: pointer;
+              }
+
+              .print-toolbar button.primary {
+                background: #2f6fed;
+                border-color: #2f6fed;
+                color: #fff;
+              }
+
+              body {
+                padding-top: 46px !important;
+              }
+
+              @media print {
+                .print-toolbar { display: none !important; }
+                body { padding-top: 0 !important; }
+              }
             </style>
           </head>
-          <body>${pageMarkup}</body>
+          <body>
+            <div class="print-toolbar">
+              <button class="primary" onclick="window.print()">🖨️ Print Again</button>
+              <button onclick="window.close()">Close</button>
+            </div>
+            ${pageMarkup}
+          </body>
         </html>
       `);
       printWindow.document.close();
@@ -437,11 +508,14 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
         printWindow.print();
       };
 
-      printWindow.onafterprint = () => {
-        setTimeout(() => {
-          if (!printWindow.closed) printWindow.close();
-        }, 300);
-      };
+      // NOTE: deliberately no onafterprint auto-close here. Chrome fires `afterprint` as soon
+      // as its own preview dialog goes away — including when the user picks "Print using system
+      // dialogue", where Chrome closes its preview and hands off to the native Windows dialog.
+      // Closing this window at that moment destroys the document that owns the native dialog,
+      // so the dialog flashes open and instantly disappears. It's a race: on a local Win10/11
+      // box the native dialog usually wins, but over RDP (Windows Server, printer redirection,
+      // slower spooler enumeration) the close fires first and kills it every time. The window
+      // is closed by the user via the Close button in the toolbar below instead.
 
       setTimeout(startPrint, 300);
     } catch (error) {
@@ -618,17 +692,22 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
                         }
                       />
                     </label>
-                    {pincodeConfig?.print_pincode_field_slug && pincodeConfig?.print_address_field_slug && (
-                      <label className="flex items-center gap-1.5 pt-1 border-t border-gray-100 mt-1">
-                        <input
-                          type="checkbox"
-                          checked={pincodeAutoFillState[o.id] || false}
-                          onChange={(e) => togglePincodeAutoFill(o, e.target.checked)}
-                        />
-                        Auto-append District/State from PIN
-                        {pincodeLoadingState[o.id] && <span className="text-gray-400">…</span>}
-                      </label>
-                    )}
+                    {pincodeConfig?.print_pincode_field_slug &&
+                      pincodeConfig?.print_address_field_slug && (
+                        <label className="flex items-center gap-1.5 pt-1 border-t border-gray-100 mt-1">
+                          <input
+                            type="checkbox"
+                            checked={pincodeAutoFillState[o.id] || false}
+                            onChange={(e) =>
+                              togglePincodeAutoFill(o, e.target.checked)
+                            }
+                          />
+                          Auto-append District/State from PIN
+                          {pincodeLoadingState[o.id] && (
+                            <span className="text-gray-400">…</span>
+                          )}
+                        </label>
+                      )}
                   </div>
                 </div>
               ))}
