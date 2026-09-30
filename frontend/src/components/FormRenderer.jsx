@@ -43,7 +43,23 @@ function renderInput(field, value, set) {
     case 'multiline_text':
       return <textarea className="input" rows={3} value={value || ''} onChange={(e) => set(e.target.value)} />;
     case 'number':
-      return <input type="number" className="input" value={value ?? ''} onChange={(e) => set(e.target.value)} />;
+      // Deliberately type="tel", NOT type="number": a native number input blocks any
+      // character that isn't part of a single valid number — including commas and spaces —
+      // so a value like "9401951300, 9678555433" (multiple phone numbers) could never be
+      // typed here, and an already-saved value like that showed up BLANK in this input (even
+      // though the underlying data was completely fine — that's why it still displayed
+      // correctly in the Orders table and on the printed label, since those read the raw
+      // stored string directly and never go through this input at all).
+      // type="tel" never restricts which characters can be typed/pasted, so it shows and
+      // accepts a value exactly as stored — single number or comma-separated multiple — while
+      // still hinting a phone-style keypad on mobile devices. No data format changes at all;
+      // the value is stored as a plain string either way, same as every other field type.
+      return (
+        <div>
+          <input type="tel" className="input" value={value ?? ''} onChange={(e) => set(e.target.value)} />
+          <p className="text-[11px] text-gray-400 mt-1">Multiple values can be separated by commas.</p>
+        </div>
+      );
     case 'date':
       return <input type="date" className="input" value={value || ''} onChange={(e) => set(e.target.value)} />;
     case 'dropdown':
