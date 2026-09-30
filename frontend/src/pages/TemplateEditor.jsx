@@ -27,6 +27,10 @@ export default function TemplateEditor() {
   const [selectedObj, setSelectedObj] = useState(null);
   const [selectedLayoutId, setSelectedLayoutId] = useState(null);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  // Bumped whenever a custom print-time field (see "CUSTOM PRINT-TIME FIELDS" below) is
+  // added, renamed, or removed — same pattern as layoutVersion, just forces a re-render so
+  // the derived customPrintFields() list picks up canvas mutations React can't otherwise see.
+  const [customFieldVersion, setCustomFieldVersion] = useState(0);
   const [croppingActive, setCroppingActive] = useState(false);
   const [fontSizeValue, setFontSizeValue] = useState(16);
   const [strokeWidthValue, setStrokeWidthValue] = useState(1);
@@ -223,6 +227,7 @@ export default function TemplateEditor() {
       canvas.getObjects().forEach(restrictTextControls);
       setSelectedLayoutId(null);
       setLayoutVersion((version) => version + 1);
+      setCustomFieldVersion((version) => version + 1);
       canvas.requestRenderAll();
     });
   }
@@ -237,8 +242,9 @@ export default function TemplateEditor() {
     setSelectedObj(null);
     setSelectedLayoutId(null);
     setLayoutVersion((version) => version + 1);
+    setCustomFieldVersion((version) => version + 1);
     setMargins(DEFAULT_MARGINS);
-    resizeCanvas("A5", "landscape");
+    resizeCanvas("A5", "landscape"); resizeCanvas("A5", "landscape");
   }
 
   async function saveTemplate() {
@@ -423,6 +429,92 @@ export default function TemplateEditor() {
     restrictTextControls(t);
     fabricRef.current.add(t).setActiveObject(t);
   }
+
+  // ---- Custom print-time fields ----
+  // Unlike Consignment/Number of Boxes (hardcoded), these are user-defined at design time —
+  // any name, with an optional prefix (e.g. "EP-", "#") shown before whatever value gets
+  // typed for it in Print Preview. Everything about a custom field (name, prefix) lives
+  // entirely inside the placeholder object's own `data` — nothing is stored anywhere else,
+  // so no new table/migration is needed, and a template that never adds one behaves exactly
+  // as before this feature existed. Print Preview discovers which custom fields exist by
+  // scanning the currently-selected template's own saved canvas JSON, so each template only
+  // ever shows the custom fields it actually placed on its canvas.
+  function customPrintFields() {
+    const objs = (fabricRef.current?.getObjects() || []).filter(
+      (obj) => obj.data?.placeholderType === "customPrint",
+    );
+    const map = new Map();
+    objs.forEach((obj) => {
+      const id = obj.data?.customFieldId;
+      if (id && !map.has(id)) {
+        map.set(id, {
+          id,
+          name: obj.data.customFieldName || "Custom Field",
+          prefix: obj.data.customFieldPrefix || "",
+        });
+      }
+    });
+    return [...map.values()];
+  }
+
+  function addCustomPrintField() {
+    const name = window.prompt('Field name (e.g. "EP No.")')?.trim();
+    if (!name) return;
+    const prefixInput = window.prompt(
+      'Optional prefix shown before the value in Print Preview (e.g. "EP-", "#"). Leave blank for none.',
+      "",
+    );
+    const prefix = (prefixInput || "").trim();
+    const customFieldId = `customfield_${Date.now()}`;
+    const t = new fabric.Textbox(`{{${name}}}`, {
+      left: 40,
+      top: 40,
+      fontSize: 16,
+      width: 200,
+      fill: "#7c3aed",
+      data: {
+        placeholderType: "customPrint",
+        customFieldId,
+        customFieldName: name,
+        customFieldPrefix: prefix,
+      },
+    });
+    restrictTextControls(t);
+    fabricRef.current.add(t).setActiveObject(t);
+    setCustomFieldVersion((version) => version + 1);
+  }
+
+  function renameCustomPrintField(field) {
+    const nextName = window.prompt("Field name", field.name)?.trim();
+    if (!nextName) return;
+    const nextPrefixRaw = window.prompt(
+      "Prefix (leave blank for none)",
+      field.prefix,
+    );
+    const nextPrefix = (nextPrefixRaw ?? field.prefix ?? "").trim();
+    fabricRef.current.getObjects().forEach((obj) => {
+      if (obj.data?.customFieldId === field.id) {
+        obj.set("data", {
+          ...obj.data,
+          customFieldName: nextName,
+          customFieldPrefix: nextPrefix,
+        });
+      }
+    });
+    setCustomFieldVersion((version) => version + 1);
+    fabricRef.current.requestRenderAll();
+  }
+
+  function removeCustomPrintField(field) {
+    const canvas = fabricRef.current;
+    canvas
+      .getObjects()
+      .filter((obj) => obj.data?.customFieldId === field.id)
+      .forEach((obj) => canvas.remove(obj));
+    canvas.discardActiveObject();
+    setCustomFieldVersion((version) => version + 1);
+    canvas.requestRenderAll();
+  }
   function insertImageFromUrl(url) {
     fabric.Image.fromURL(
       url,
@@ -453,11 +545,13 @@ export default function TemplateEditor() {
       canvas.remove(obj);
       setSelectedLayoutId(null);
       setLayoutVersion((version) => version + 1);
+      setCustomFieldVersion((version) => version + 1);
       canvas.discardActiveObject();
       canvas.requestRenderAll();
     } else if (obj) {
       canvas.remove(obj);
       canvas.discardActiveObject();
+      setCustomFieldVersion((version) => version + 1);
       canvas.requestRenderAll();
     }
   }
@@ -690,6 +784,7 @@ export default function TemplateEditor() {
   }
 
   const layouts = layoutObjects();
+  const customFields = customPrintFields();
   const isTextSelected =
     selectedObj &&
     selectedObj.data?.layoutType !== "layout" &&
@@ -771,7 +866,7 @@ export default function TemplateEditor() {
               <option value="portrait">Portrait</option>
             </select>
           </div>
-                    <div className="border-t border-gray-100 pt-3">
+          <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center justify-between mb-1.5">
               <label className="label-text !mb-0">Page Margins (mm)</label>
               <label className="flex items-center gap-1 text-[11px] text-gray-500">
@@ -1069,6 +1164,47 @@ export default function TemplateEditor() {
             >
               + Number of Boxes
             </button>
+            <div className="mt-3 pt-2 border-t border-gray-100">
+              <div className="text-[11px] text-gray-400 mb-1.5">
+                Your own print-time fields — only shows up in Print Preview for templates that
+                actually use it.
+              </div>
+              <button
+                className="w-full text-left text-xs px-2 py-1.5 rounded bg-gray-50 hover:bg-brand-50 mb-1"
+                onClick={addCustomPrintField}
+              >
+                + Add Custom Field
+              </button>
+              {customFields.length > 0 && (
+                <ul className="space-y-1">
+                  {customFields.map((field) => (
+                    <li
+                      key={field.id}
+                      className="flex items-center justify-between gap-2 text-xs bg-gray-50 rounded px-2 py-1"
+                    >
+                      <span className="truncate">
+                        {field.name}
+                        {field.prefix ? ` (prefix: "${field.prefix}")` : ""}
+                      </span>
+                      <span className="flex gap-1 shrink-0">
+                        <button
+                          className="text-gray-500 hover:text-gray-900"
+                          onClick={() => renameCustomPrintField(field)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-800"
+                          onClick={() => removeCustomPrintField(field)}
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
           <div>
             <div className="text-xs font-semibold text-gray-500 mb-1.5">

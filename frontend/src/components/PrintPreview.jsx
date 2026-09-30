@@ -38,6 +38,20 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
   const [pincodeLoadingState, setPincodeLoadingState] = useState({}); // { [orderId]: boolean }
   const [pincodeOverrides, setPincodeOverrides] = useState({}); // { [orderId]: suffixString }
 
+  // Custom print-time fields (e.g. "EP No.") defined per-template in the Template Editor.
+  // Purely preview/print-time state, exactly like Consignment — never touches order data in the DB.
+  const [customFieldValues, setCustomFieldValues] = useState({}); // { [orderId]: { [fieldId]: { enabled, value } } }
+
+  function updateCustomField(orderId, fieldId, patch) {
+    setCustomFieldValues((s) => ({
+      ...s,
+      [orderId]: {
+        ...s[orderId],
+        [fieldId]: { ...(s[orderId]?.[fieldId] || { enabled: false, value: "" }), ...patch },
+      },
+    }));
+  }
+
   useEffect(() => {
     api
       .get("/pincode/config")
@@ -117,6 +131,25 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
     () => orders.find((o) => o.id === activeOrderId),
     [orders, activeOrderId],
   );
+
+  // Which custom print-time fields this SPECIFIC template actually uses — discovered straight
+  // from its saved canvas JSON, so a template that never added one shows nothing extra here.
+  const templateCustomFields = useMemo(() => {
+    const objs = templateJson?.objects || [];
+    const map = new Map();
+    objs.forEach((obj) => {
+      if (obj.data?.placeholderType !== "customPrint") return;
+      const id = obj.data.customFieldId;
+      if (id && !map.has(id)) {
+        map.set(id, {
+          id,
+          name: obj.data.customFieldName || "Custom Field",
+          prefix: obj.data.customFieldPrefix || "",
+        });
+      }
+    });
+    return [...map.values()];
+  }, [templateJson]);
   useEffect(() => {
     if (!templateJson || !activeOrder) {
       setPreviewSvg(null);
@@ -129,13 +162,14 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
       consignment[activeOrder.id] || {},
       boxCounts[activeOrder.id] || 1,
       boxCounts[activeOrder.id] || 1,
+      customFieldValues[activeOrder.id] || {},
     ).then((url) => {
       if (!cancelled) setPreviewSvg(url);
     });
     return () => {
       cancelled = true;
     };
-  }, [templateJson, activeOrder, consignment, boxCounts, pincodeOverrides]);
+  }, [templateJson, activeOrder, consignment, boxCounts, pincodeOverrides, customFieldValues]);
 
   function fieldBySlug(slug) {
     return fields.find((f) => f.slug === slug);
@@ -162,7 +196,7 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
   // height, and push every object that sits below it (and overlaps it horizontally) down by that
   // amount — cascading automatically if more than one placeholder grows. Objects that don't grow
   // never move, so a template with no overflow renders exactly as designed.
-  function renderLabel(json, order, orderConsignment, boxIndex, boxTotal) {
+  function renderLabel(json, order, orderConsignment, boxIndex, boxTotal, orderCustomFields = {}) {
     return new Promise((resolve) => {
       const labelMm = getPageMm(
         templateMeta?.page_size || "A5",
@@ -219,6 +253,17 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
             obj.set("text", parts.join("   "));
           } else if (obj.data?.placeholderType === "boxCount") {
             obj.set("text", `Box ${boxIndex} of ${boxTotal}`);
+          } else if (obj.data?.placeholderType === "customPrint") {
+            // A user-defined print-time field (see Template Editor's "Custom Print-Time
+            // Fields"). Its own prefix travels with the placeholder's data, set once when it
+            // was created, so it stays correct even if this template is duplicated later.
+            const entry = orderCustomFields[obj.data.customFieldId];
+            obj.set(
+              "text",
+              entry?.enabled && entry.value
+                ? `${obj.data.customFieldPrefix || ""}${entry.value}`
+                : "",
+            );
           }
         });
         canvas.renderAll(); // let Fabric recalculate each Textbox's wrapped height first
@@ -325,6 +370,7 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
             consignment[order.id] || {},
             i,
             total,
+            customFieldValues[order.id] || {},
           );
 
           labels.push({
@@ -708,6 +754,26 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
                           )}
                         </label>
                       )}
+                    {templateCustomFields.map((field) => (
+                      <label key={field.id} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={customFieldValues[o.id]?.[field.id]?.enabled || false}
+                          onChange={(e) =>
+                            updateCustomField(o.id, field.id, { enabled: e.target.checked })
+                          }
+                        />
+                        {field.name}:
+                        <input
+                          className="input !py-0.5 !px-1.5 text-xs flex-1"
+                          value={customFieldValues[o.id]?.[field.id]?.value || ""}
+                          onChange={(e) =>
+                            updateCustomField(o.id, field.id, { value: e.target.value })
+                          }
+                          placeholder={field.prefix ? `${field.prefix}...` : ""}
+                        />
+                      </label>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -720,7 +786,7 @@ export default function PrintPreview({ orderIds, fields, onClose }) {
                 Preview —{" "}
                 {activeOrder
                   ? Object.values(activeOrder.data)[0] ||
-                    `Order #${activeOrder.id}`
+                  `Order #${activeOrder.id}`
                   : ""}
               </div>
               <div className="flex gap-2">
